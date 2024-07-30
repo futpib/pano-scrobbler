@@ -1,6 +1,6 @@
 Welcome to my spaghetti
 
-- Create /app/src/main/java/com/arn/scrobble/Tokens.kt
+- Create `./app/src/main/java/com/arn/scrobble/Tokens.kt`
 ```
 package com.arn.scrobble
 object Tokens {
@@ -19,14 +19,28 @@ object Tokens {
 ```
 - Remove or comment out the lines below `// remove if not needed` in app/build.gradle.kts and /build.gradle.kts
 
-- Create app/version.txt and put a positive integer in it. This will be your app version code.
+- Create app/version.txt and put a positive integer in it without a trailing newline. This will be your app version code.
 The version name will be derived from this.
 
-- Create a Firebase project for Crashlytics and add google-services.json.
+`echo -n 999 > ./app/version.txt`
+
+- Create a Firebase project for Crashlytics and add google-services.json. Put it in `./app/src/google-services.json`.
+Unless you intend on publishing the app as [`com.arn.scrobble`](https://play.google.com/store/apps/details?id=com.arn.scrobble) (you probably do not), change the `applicationId` in `./app/build.gradle.kts` to the one you will use with firebase.
 See https://firebase.google.com/docs/android/setup
 
 - Create a BKS keystore for the embedded https server with the password EMBEDDED_SERVER_KEYSTORE_PASSWORD and alias selfsigned.
-Put it in /app/src/main/res/raw/embedded_server_bks.bks
+Put it in `./app/src/main/res/raw/embedded_server_bks.bks`
+
+- If you are not using Android Studio which may do this for you (for example you are building on the command line or CI),
+create a keystore and reference it in the `./local.properties`.
+```
+release.keystore=keystore.kjs
+release.storePassword=keystore.kjs
+release.alias=keystore.kjs
+release.password=keystore.kjs
+```
+
+`keytool -genkey -alias keystore.jks -keyalg RSA -keystore ./app/keystore.jks -keysize 2048`
 
 - Obtain now playing notification strings and their translations by decompiling the resources of
 the Android System Intelligence and Shazam apks respectively with ApkTool and then running [py-scripts/np-strings-extract.py](py-scripts/np-strings-extract.py) on them.

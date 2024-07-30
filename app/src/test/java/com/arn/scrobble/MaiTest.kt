@@ -82,7 +82,11 @@ class MaiTest {
             val then = System.currentTimeMillis()
             val (artist, track) = MetadataUtils.parseYoutubeTitle(it.args[0] ?: "")
             val now = System.currentTimeMillis()
-            println("$artist - $track in ${now - then}ms")
+            print("`$artist' - `$track' ")
+            if (artist != it.expected.artist || track != it.expected.track) {
+                print("(expected: `${it.expected.artist}' - `${it.expected.track}') ")
+            }
+            println("in ${now - then}ms")
 
             collector.checkThat(artist, equalTo(it.expected.artist))
             collector.checkThat(track, equalTo(it.expected.track))

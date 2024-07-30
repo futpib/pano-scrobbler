@@ -781,4 +781,7 @@ Your purchases are managed by Google Play. They are linked with a Google Play ac
     <string name="billing_scrobble_source">Remember and see apps you scrobbled from and search directly in them</string>
     <string name="billing_regex_extract">Write custom metadata extraction rules using regex</string>
 
+    <string name="song_format_string">%1$s by %2$s</string>
+    <string name="auto_shazam_now_playing">%1$s by %2$s</string>
+
 </resources>

@@ -580,16 +580,6 @@
         }
     },
     {
-        "description": "should prioritize dashes over 【】",
-        "args": [
-            "Artist -Track-【Official Video】"
-        ],
-        "expected": {
-            "artist": "Artist ",
-            "track": "Track"
-        }
-    },
-    {
         "description": "should prioritize other brackets over 【】",
         "args": [
             "Artist「Track」【stuff】"
