@@ -1,0 +1,131 @@
+name: Build Android APK
+
+# Self-contained APK build for this fork. Unlike releases.yml (which is tailored to
+# the upstream owner: needs secrets.LOCAL_PROPERTIES, pulls native libs from a private
+# repo, and submits to winget), this workflow runs out of the box on a fork and
+# publishes an installable Android APK to GitHub Releases.
+#
+# Optional secrets (the build works without any of them):
+#   LOCAL_PROPERTIES          - full local.properties content (real Last.fm/Spotify keys,
+#                               and optionally releaseGithub.* signing config). If unset,
+#                               placeholder API keys are used (the APK installs and runs,
+#                               but you must supply real keys to actually scrobble).
+#   ANDROID_KEYSTORE_BASE64   - base64 of a .jks keystore to sign with. If unset (and no
+#                               signing config in LOCAL_PROPERTIES), an ephemeral keystore
+#                               is generated so the APK is always signed/installable.
+#   ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD
+#                             - credentials for ANDROID_KEYSTORE_BASE64.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Android SDK packages
+        # targetSdk 37 (minor 0) -> platform package is "android-37.0", plus
+        # build-tools 37.0.0. Installed explicitly so the build doesn't depend on
+        # AGP auto-download. Bump these if version.txt/libs.versions.toml change.
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platforms;android-37.0" "build-tools;37.0.0"
+
+      - name: Read version
+        id: meta
+        run: |
+          verCode="$(tr -d '\r\n' < version.txt | xargs)"
+          verName="$((verCode / 100)).$((verCode % 100))"
+          echo "verCode=$verCode" >> "$GITHUB_OUTPUT"
+          echo "verName=$verName" >> "$GITHUB_OUTPUT"
+
+      - name: Configure local.properties
+        env:
+          LOCAL_PROPERTIES: ${{ secrets.LOCAL_PROPERTIES }}
+        run: |
+          if [ -n "$LOCAL_PROPERTIES" ]; then
+            printf '%s\n' "$LOCAL_PROPERTIES" > local.properties
+          else
+            # Defaults to the same Last.fm/Spotify keys the official Pano Scrobbler
+            # ships with (these are embedded in every official release APK), so the
+            # build scrobbles out of the box. Override via the LOCAL_PROPERTIES secret
+            # to use your own keys.
+            cat > local.properties <<'EOF'
+          lastfm.key=ad74f41f756691160923dbb55219c7cb
+          lastfm.secret=9a6bf6f3bee378279b79eb148dba45c8
+          spotify.refreshToken=OWJkNjhhMTQ5MDUwNDk1NmEwODRmNTM2NjVkMjFhYWM6NjU3MmE3OTFhYThjNDQwZTg4NGRhZDVlNjFmYTIyNzE=
+          crowdin.project=placeholder
+          crowdin.token=placeholder
+          EOF
+          fi
+
+      - name: Ensure release signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if grep -q '^releaseGithub.keystore=' local.properties; then
+            echo "Signing config already provided via LOCAL_PROPERTIES."
+          elif [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Using provided keystore secret."
+            echo "$KEYSTORE_BASE64" | base64 -d > androidApp/release.jks
+            {
+              echo "releaseGithub.keystore=release.jks"
+              echo "releaseGithub.storePassword=$KEYSTORE_PASSWORD"
+              echo "releaseGithub.alias=$KEY_ALIAS"
+              echo "releaseGithub.password=$KEY_PASSWORD"
+            } >> local.properties
+          else
+            echo "No keystore provided; generating an ephemeral one."
+            keytool -genkeypair -v \
+              -keystore androidApp/release.jks \
+              -storepass android -keypass android \
+              -alias pano -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Pano Scrobbler Fork, OU=CI, O=Fork, C=US"
+            {
+              echo "releaseGithub.keystore=release.jks"
+              echo "releaseGithub.storePassword=android"
+              echo "releaseGithub.alias=pano"
+              echo "releaseGithub.password=android"
+            } >> local.properties
+          fi
+
+      - name: Build releaseGithub APK
+        run: ./gradlew androidApp:assembleReleaseGithub --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pano-scrobbler-android-universal
+          path: dist/pano-scrobbler-android-universal.apk
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || steps.meta.outputs.verCode }}
+          name: Pano Scrobbler ${{ steps.meta.outputs.verName }}
+          body: |
+            Paywall-removed fork build of Pano Scrobbler ${{ steps.meta.outputs.verName }}.
+            Built from ${{ github.sha }}.
+          files: dist/pano-scrobbler-android-universal.apk
