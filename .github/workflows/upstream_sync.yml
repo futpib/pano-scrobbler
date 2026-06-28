@@ -26,9 +26,9 @@ jobs:
         uses: AndreasAugustin/actions-template-sync@v2.5.3
         with:
           source_repo_path: kawaiiDango/pano-scrobbler
-          upstream_branch: master
-          pr_title: 'Sync upstream kawaiiDango/pano-scrobbler master'
-          pr_commit_msg: 'Merge upstream kawaiiDango/pano-scrobbler master'
+          upstream_branch: main
+          pr_title: 'Sync upstream kawaiiDango/pano-scrobbler main'
+          pr_commit_msg: 'Merge upstream kawaiiDango/pano-scrobbler main'
           pr_labels: upstream-sync
           # Close any older open PR carrying the upstream-sync label when a
           # new sync runs, so at most one sync PR exists at a time.
@@ -41,6 +41,13 @@ jobs:
             precommit:
               commands:
                 - '! git ls-files --unmerged | read -r _ || { echo "Unresolved merge conflicts"; exit 1; }'
+
+      - if: success() && steps.sync.outputs.pr_number != ''
+        name: Trigger CI on sync PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run android-apk.yml --ref "${{ steps.sync.outputs.pr_branch }}"
 
       - if: success() && steps.sync.outputs.pr_number != ''
         name: Auto-merge clean sync PR
