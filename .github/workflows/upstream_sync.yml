@@ -43,13 +43,6 @@ jobs:
                 - '! git ls-files --unmerged | read -r _ || { echo "Unresolved merge conflicts"; exit 1; }'
 
       - if: success() && steps.sync.outputs.pr_number != ''
-        name: Trigger CI on sync PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run android-apk.yml --ref "${{ steps.sync.outputs.pr_branch }}"
-
-      - if: success() && steps.sync.outputs.pr_number != ''
         name: Auto-merge clean sync PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
