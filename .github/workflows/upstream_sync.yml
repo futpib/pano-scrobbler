@@ -1,0 +1,50 @@
+name: Sync upstream
+
+# Automatically merge upstream (kawaiiDango/pano-scrobbler) into this fork via PR.
+# Runs daily at 06:00 UTC, or manually via workflow_dispatch. Creates a PR
+# with upstream changes, runs CI (android-apk.yml) on the PR branch, and
+# auto-merges if clean. Stops for conflicts.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: sync
+        uses: AndreasAugustin/actions-template-sync@v2.5.3
+        with:
+          source_repo_path: kawaiiDango/pano-scrobbler
+          upstream_branch: master
+          pr_title: 'Sync upstream kawaiiDango/pano-scrobbler master'
+          pr_commit_msg: 'Merge upstream kawaiiDango/pano-scrobbler master'
+          pr_labels: upstream-sync
+          # Close any older open PR carrying the upstream-sync label when a
+          # new sync runs, so at most one sync PR exists at a time.
+          is_pr_cleanup: true
+          # Standard merge strategy (histories are related). Use recursive
+          # with patience to handle rename-heavy conflicts better.
+          git_remote_pull_params: '--no-commit --strategy=recursive -Xpatience'
+          is_allow_hooks: true
+          hooks: |
+            precommit:
+              commands:
+                - '! git ls-files --unmerged | read -r _ || { echo "Unresolved merge conflicts"; exit 1; }'
+
+      - if: success() && steps.sync.outputs.pr_number != ''
+        name: Auto-merge clean sync PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge --auto --merge "${{ steps.sync.outputs.pr_number }}"
